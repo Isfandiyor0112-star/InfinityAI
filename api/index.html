@@ -12,6 +12,7 @@
     <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
     
     <link rel="manifest" id="pwa-manifest">
 
@@ -37,6 +38,7 @@
             border: 1px solid #374151;
             max-w: 100%;
             position: relative; 
+            user-select: text;
         }
         .markdown-body code { 
             font-family: monospace; 
@@ -44,12 +46,16 @@
             padding: 0.125rem 0.25rem; 
             border-radius: 0.25rem; 
             color: #f43f5e;
+            user-select: text;
         }
         .markdown-body pre code { 
             background-color: transparent; 
             padding: 0; 
             color: #e5e7eb; 
             display: block;
+        }
+        .markdown-body, .markdown-body * {
+            user-select: text;
         }
 
         /* Кнопка скопировать внутри превью кода */
@@ -82,7 +88,7 @@
         }
     </style>
 </head>
-<body class="bg-gray-900 text-gray-100 font-sans h-screen flex flex-col select-none relative">
+<body class="bg-gray-900 text-gray-100 font-sans h-screen flex flex-col relative">
 
     <!-- Модальное окно для ввода API-ключа -->
     <div id="api-modal" class="hidden fixed inset-0 bg-gray-950/80 backdrop-blur-md flex items-center justify-center z-[100] p-4">
@@ -160,7 +166,7 @@
             <i class="fa-solid fa-image text-6xl text-gray-600"></i>
             <h2 class="text-2xl font-semibold text-gray-400">Бесконечный Мультимодальный Чат</h2>
             <p class="text-gray-500 max-w-md mx-auto text-sm">
-                Вы можете общаться текстом или прикреплять фотографии через значок скрепки. Для распознавания фото выбирайте модели с пометкой <b>VL</b>.
+                Вы можете общаться текстом, прикреплять фото/камеру или любые файлы (PDF, код, текст) через значок скрепки. Для распознавания фото выбирайте модели с пометкой <b>VL</b>.
             </p>
         </div>
     </main>
@@ -178,11 +184,14 @@
     </div>
 
     <footer class="bg-gray-800 border-t border-gray-700 p-4 flex flex-col gap-2 z-10">
-        <div class="max-w-4xl w-full mx-auto flex flex-col w-full bg-gray-700/50 rounded-xl border border-gray-600 overflow-hidden">
+        <div class="max-w-4xl w-full mx-auto flex flex-col w-full bg-gray-700/50 rounded-xl border border-gray-600">
             
             <div id="image-preview-container" class="hidden p-3 border-b border-gray-600 bg-gray-800/50 items-center gap-3">
                 <div class="relative">
-                    <img id="image-preview-element" src="" class="h-16 w-16 object-cover rounded-lg border border-gray-500">
+                    <img id="image-preview-element" src="" class="hidden h-16 w-16 object-cover rounded-lg border border-gray-500">
+                    <div id="file-preview-icon" class="hidden h-16 w-16 rounded-lg border border-gray-500 bg-gray-700 items-center justify-center text-2xl text-purple-400">
+                        <i class="fa-solid fa-file-lines"></i>
+                    </div>
                     <button id="btn-remove-image" class="absolute -top-2 -right-2 bg-red-600 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs hover:bg-red-500 shadow">
                         <i class="fa-solid fa-xmark"></i>
                     </button>
@@ -191,10 +200,27 @@
             </div>
 
             <div class="flex items-end p-2 gap-2">
-                <label for="image-input" class="cursor-pointer hover:bg-gray-600/50 text-gray-400 hover:text-white p-3 rounded-xl transition flex items-center justify-center h-12 w-12 active:scale-95">
-                    <i class="fa-solid fa-paperclip text-xl"></i>
-                </label>
-                <input type="file" id="image-input" accept="image/*" class="hidden">
+                <div class="relative">
+                    <button type="button" id="btn-attach" class="cursor-pointer hover:bg-gray-600/50 text-gray-400 hover:text-white p-3 rounded-xl transition flex items-center justify-center h-12 w-12 active:scale-95">
+                        <i class="fa-solid fa-paperclip text-xl"></i>
+                    </button>
+
+                    <div id="attach-menu" class="hidden fixed bg-gray-800 border border-gray-600 rounded-xl shadow-2xl overflow-hidden w-52 z-[60]">
+                        <button type="button" id="attach-opt-gallery" class="w-full flex items-center gap-3 px-4 py-3 text-sm hover:bg-gray-700 transition text-left">
+                            <i class="fa-solid fa-image text-blue-400 w-4"></i> Фото из галереи
+                        </button>
+                        <button type="button" id="attach-opt-camera" class="w-full flex items-center gap-3 px-4 py-3 text-sm hover:bg-gray-700 transition text-left border-t border-gray-700">
+                            <i class="fa-solid fa-camera text-green-400 w-4"></i> Камера
+                        </button>
+                        <button type="button" id="attach-opt-file" class="w-full flex items-center gap-3 px-4 py-3 text-sm hover:bg-gray-700 transition text-left border-t border-gray-700">
+                            <i class="fa-solid fa-file-lines text-purple-400 w-4"></i> Файл (PDF, код, текст)
+                        </button>
+                    </div>
+                </div>
+
+                <input type="file" id="image-input-gallery" accept="image/*" class="hidden">
+                <input type="file" id="image-input-camera" accept="image/*" capture="environment" class="hidden">
+                <input type="file" id="doc-input" accept=".txt,.md,.py,.js,.ts,.json,.csv,.html,.htm,.css,.xml,.yaml,.yml,.log,.c,.cpp,.h,.java,.go,.rs,.sh,.sql,.ini,.conf,.pdf,application/pdf,text/*" class="hidden">
 
                 <textarea id="user-input" rows="1" placeholder="Напишите сообщение..." class="flex-1 bg-transparent border-0 px-2 py-3 text-white placeholder-gray-400 focus:outline-none resize-none max-h-32 no-scrollbar"></textarea>
                 
@@ -209,13 +235,18 @@
         // Загружаем ключ из LocalStorage при запуске страницы
         let OPENROUTER_API_KEY = localStorage.getItem('openrouter_api_key') || "";
 
+        if (window.pdfjsLib) {
+            pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+        }
+
         marked.setOptions({
             breaks: true,
             gfm: true
         });
 
+        // Поле "vision: true" означает, что модель умеет принимать изображения (image_url)
         const MODELS = [
-            { id: "nvidia/nemotron-nano-12b-v2-vl:free", name: "NVIDIA: Nemotron Nano 12B VL (Поддерживает Фото)" },
+            { id: "nvidia/nemotron-nano-12b-v2-vl:free", name: "NVIDIA: Nemotron Nano 12B VL (Поддерживает Фото)", vision: true },
             { id: "nex-agi/nex-n2-pro:free", name: "Nex AGI: Nex-N2-Pro" },
             { id: "nvidia/nemotron-3.5-content-safety:free", name: "NVIDIA: Nemotron 3.5 Content Safety" },
             { id: "nvidia/nemotron-3-ultra-550b-a55b:free", name: "NVIDIA: Nemotron 3 Ultra" },
@@ -223,8 +254,8 @@
             { id: "poolside/laguna-xs.2:free", name: "Poolside: Laguna XS.2" },
             { id: "poolside/laguna-m.1:free", name: "Poolside: Laguna M.1" },
             { id: "moonshotai/kimi-k2.6:free", name: "MoonshotAI: Kimi K2.6" },
-            { id: "google/gemma-4-26b-a4b-it:free", name: "Google: Gemma 4 26B A4B (VL)" },
-            { id: "google/gemma-4-31b-it:free", name: "Google: Gemma 4 31B (VL)" },
+            { id: "google/gemma-4-26b-a4b-it:free", name: "Google: Gemma 4 26B A4B (VL)", vision: true },
+            { id: "google/gemma-4-31b-it:free", name: "Google: Gemma 4 31B (VL)", vision: true },
             { id: "nvidia/nemotron-3-super-120b-a12b:free", name: "NVIDIA: Nemotron 3 Super" },
             { id: "liquid/lfm-2.5-1.2b-thinking:free", name: "LiquidAI: LFM2.5-1.2B-Thinking" },
             { id: "liquid/lfm-2.5-1.2b-instruct:free", name: "LiquidAI: LFM2.5-1.2B-Instruct" },
@@ -245,8 +276,13 @@
         let fileHandle = null; 
         let db = null;         
         let attachedImageBase64 = null; 
+        let attachedDocText = null;
+        let attachedDocName = null;
         let abortController = null;
         let isGenerating = false;
+        let userPinnedToBottom = true;
+
+        const TEXT_EXTENSIONS = ['txt','md','py','js','ts','json','csv','html','htm','css','xml','yaml','yml','log','c','cpp','h','java','go','rs','sh','sql','ini','conf'];
 
         const modelSelect = document.getElementById('model-select');
         const chatContainer = document.getElementById('chat-container');
@@ -266,9 +302,18 @@
         const scrollBadge = document.getElementById('scroll-badge');
         const scrollBadgeStatic = document.getElementById('scroll-badge-static');
 
-        const imageInput = document.getElementById('image-input');
+        const btnAttach = document.getElementById('btn-attach');
+        const attachMenu = document.getElementById('attach-menu');
+        const attachOptGallery = document.getElementById('attach-opt-gallery');
+        const attachOptCamera = document.getElementById('attach-opt-camera');
+        const attachOptFile = document.getElementById('attach-opt-file');
+        const imageInputGallery = document.getElementById('image-input-gallery');
+        const imageInputCamera = document.getElementById('image-input-camera');
+        const docInput = document.getElementById('doc-input');
+
         const imagePreviewContainer = document.getElementById('image-preview-container');
         const imagePreviewElement = document.getElementById('image-preview-element');
+        const filePreviewIcon = document.getElementById('file-preview-icon');
         const imagePreviewName = document.getElementById('image-preview-name');
         const btnRemoveImage = document.getElementById('btn-remove-image');
 
@@ -278,27 +323,54 @@
         const btnSaveApi = document.getElementById('btn-save-api');
         const btnChangeApi = document.getElementById('btn-change-api');
 
-        function scrollToBottom(force = false) {
-            const threshold = 150;
-            const isNearBottom = chatContainer.scrollHeight - chatContainer.scrollTop - chatContainer.clientHeight < threshold;
-            
-            if (isNearBottom || force) {
-                chatContainer.scrollTo({ top: chatContainer.scrollHeight, behavior: force ? 'auto' : 'smooth' });
+        function modelSupportsVision(modelId) {
+            const model = MODELS.find(m => m.id === modelId);
+            return !!(model && model.vision);
+        }
+
+        // Если выбранная модель не поддерживает изображения, заменяем картинки в истории на текстовую заметку,
+        // чтобы запрос к API не падал с ошибкой при смене модели после отправки фото.
+        function buildMessagesForRequest(modelId) {
+            if (modelSupportsVision(modelId)) return chatHistory;
+            return chatHistory.map(msg => {
+                if (Array.isArray(msg.content)) {
+                    const textPart = msg.content.find(c => c.type === 'text');
+                    const hasImage = msg.content.some(c => c.type === 'image_url');
+                    let text = textPart ? textPart.text : '';
+                    if (hasImage) text += '\n[Изображение было прикреплено к этому сообщению, но текущая модель не поддерживает просмотр изображений]';
+                    return { role: msg.role, content: text };
+                }
+                return msg;
+            });
+        }
+
+        // ====== Прокрутка чата ======
+        function scrollToBottom(force = false, instant = false) {
+            if (force) {
+                chatContainer.scrollTo({ top: chatContainer.scrollHeight, behavior: instant ? 'auto' : 'smooth' });
+                userPinnedToBottom = true;
                 btnScrollBottom.classList.add('hidden');
                 scrollBadge.classList.add('hidden');
                 scrollBadgeStatic.classList.add('hidden');
-            } else {
+                return;
+            }
+            if (!userPinnedToBottom) {
                 if (isGenerating) {
                     scrollBadge.classList.remove('hidden');
                     scrollBadgeStatic.classList.remove('hidden');
                 }
+                return;
             }
+            // Во время стриминга используем мгновенную прокрутку (без 'smooth'),
+            // иначе анимации накладываются друг на друга и блокируют ручную прокрутку вверх.
+            chatContainer.scrollTo({ top: chatContainer.scrollHeight, behavior: 'auto' });
         }
 
         chatContainer.addEventListener('scroll', () => {
-            const threshold = 200;
+            const threshold = 80;
             const isNearBottom = chatContainer.scrollHeight - chatContainer.scrollTop - chatContainer.clientHeight < threshold;
-            
+            userPinnedToBottom = isNearBottom;
+
             if (isNearBottom) {
                 btnScrollBottom.classList.add('hidden');
                 scrollBadge.classList.add('hidden');
@@ -309,7 +381,7 @@
         });
 
         btnScrollBottom.addEventListener('click', () => {
-            chatContainer.scrollTo({ top: chatContainer.scrollHeight, behavior: 'smooth' });
+            scrollToBottom(true);
         });
 
         function initDatabase() {
@@ -373,28 +445,162 @@
             dlAnchor.remove();
         }
 
-        imageInput.addEventListener('change', function(e) {
-            const file = e.target.files[0];
+        // ====== Меню вложений (скрепка) ======
+        // Меню позиционируется как fixed и пересчитывается через JS,
+        // чтобы не обрезаться родительскими контейнерами на мобильных браузерах (Samsung Internet и др.)
+        function positionAttachMenu() {
+            const rect = btnAttach.getBoundingClientRect();
+            const menuWidth = 208; // соответствует w-52
+            let left = rect.left;
+            if (left + menuWidth > window.innerWidth - 8) {
+                left = window.innerWidth - menuWidth - 8;
+            }
+            if (left < 8) left = 8;
+            attachMenu.style.left = left + 'px';
+            attachMenu.style.bottom = (window.innerHeight - rect.top + 8) + 'px';
+            attachMenu.style.top = 'auto';
+        }
+
+        function openAttachMenu() {
+            positionAttachMenu();
+            attachMenu.classList.remove('hidden');
+        }
+
+        function closeAttachMenu() {
+            attachMenu.classList.add('hidden');
+        }
+
+        btnAttach.addEventListener('click', (e) => {
+            e.stopPropagation();
+            if (attachMenu.classList.contains('hidden')) {
+                openAttachMenu();
+            } else {
+                closeAttachMenu();
+            }
+        });
+        document.addEventListener('click', (e) => {
+            if (!attachMenu.classList.contains('hidden') && !attachMenu.contains(e.target) && e.target !== btnAttach) {
+                closeAttachMenu();
+            }
+        });
+        window.addEventListener('resize', () => {
+            if (!attachMenu.classList.contains('hidden')) positionAttachMenu();
+        });
+        attachOptGallery.addEventListener('click', () => { closeAttachMenu(); imageInputGallery.click(); });
+        attachOptCamera.addEventListener('click', () => { closeAttachMenu(); imageInputCamera.click(); });
+        attachOptFile.addEventListener('click', () => { closeAttachMenu(); docInput.click(); });
+
+        function handleImageFile(file) {
             if (!file) return;
+            clearAttachment();
             const reader = new FileReader();
             reader.onload = function(evt) {
-                attachedImageBase64 = evt.target.result; 
+                attachedImageBase64 = evt.target.result;
                 imagePreviewElement.src = attachedImageBase64;
+                imagePreviewElement.classList.remove('hidden');
+                filePreviewIcon.classList.add('hidden');
                 imagePreviewName.textContent = file.name;
                 imagePreviewContainer.classList.remove('hidden');
                 imagePreviewContainer.classList.add('flex');
             };
             reader.readAsDataURL(file);
+        }
+        imageInputGallery.addEventListener('change', (e) => { handleImageFile(e.target.files[0]); e.target.value = ''; });
+        imageInputCamera.addEventListener('change', (e) => { handleImageFile(e.target.files[0]); e.target.value = ''; });
+
+        async function extractPdfText(file) {
+            const arrayBuffer = await file.arrayBuffer();
+            const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+            let fullText = '';
+            const maxPages = Math.min(pdf.numPages, 40);
+            for (let i = 1; i <= maxPages; i++) {
+                const page = await pdf.getPage(i);
+                const content = await page.getTextContent();
+                fullText += content.items.map(it => it.str).join(' ') + '\n\n';
+            }
+            if (pdf.numPages > maxPages) {
+                fullText += `\n[... показаны первые ${maxPages} страниц из ${pdf.numPages} ...]`;
+            }
+            return fullText.trim();
+        }
+
+        docInput.addEventListener('change', async (e) => {
+            const file = e.target.files[0];
+            e.target.value = '';
+            if (!file) return;
+
+            if (file.type.startsWith('image/')) {
+                handleImageFile(file);
+                return;
+            }
+
+            clearAttachment();
+
+            const ext = file.name.includes('.') ? file.name.split('.').pop().toLowerCase() : '';
+            const isPdf = ext === 'pdf' || file.type === 'application/pdf';
+
+            if (isPdf) {
+                if (!window.pdfjsLib) {
+                    alert('Не удалось загрузить библиотеку для чтения PDF. Проверьте подключение к интернету.');
+                    return;
+                }
+                try {
+                    imagePreviewName.textContent = `Чтение PDF: ${file.name}...`;
+                    filePreviewIcon.classList.remove('hidden');
+                    imagePreviewElement.classList.add('hidden');
+                    imagePreviewContainer.classList.remove('hidden');
+                    imagePreviewContainer.classList.add('flex');
+
+                    let text = await extractPdfText(file);
+                    if (!text) text = '[Не удалось извлечь текст из PDF — возможно, это скан-изображение]';
+                    if (text.length > 60000) {
+                        text = text.slice(0, 60000) + '\n[... текст обрезан из-за большого размера ...]';
+                    }
+
+                    attachedDocText = text;
+                    attachedDocName = file.name;
+                    imagePreviewName.textContent = file.name;
+                } catch (err) {
+                    console.error(err);
+                    alert('Не удалось прочитать PDF файл.');
+                    clearAttachment();
+                }
+                return;
+            }
+
+            // Текстовые файлы и код
+            const reader = new FileReader();
+            reader.onload = (evt) => {
+                let text = evt.target.result;
+                if (text.length > 60000) {
+                    text = text.slice(0, 60000) + '\n[... текст обрезан из-за большого размера ...]';
+                }
+                attachedDocText = text;
+                attachedDocName = file.name;
+                imagePreviewElement.classList.add('hidden');
+                filePreviewIcon.classList.remove('hidden');
+                imagePreviewName.textContent = file.name;
+                imagePreviewContainer.classList.remove('hidden');
+                imagePreviewContainer.classList.add('flex');
+            };
+            reader.onerror = () => alert('Не удалось прочитать файл. Поддерживаются текстовые файлы, код и PDF.');
+            reader.readAsText(file);
         });
 
         btnRemoveImage.addEventListener('click', function(e) {
-            e.preventDefault(); clearImagePreview();
+            e.preventDefault(); clearAttachment();
         });
 
-        function clearImagePreview() {
+        function clearAttachment() {
             attachedImageBase64 = null;
-            imageInput.value = '';
+            attachedDocText = null;
+            attachedDocName = null;
+            imageInputGallery.value = '';
+            imageInputCamera.value = '';
+            docInput.value = '';
             imagePreviewElement.src = '';
+            imagePreviewElement.classList.add('hidden');
+            filePreviewIcon.classList.add('hidden');
             imagePreviewContainer.classList.remove('flex');
             imagePreviewContainer.classList.add('hidden');
         }
@@ -474,7 +680,7 @@
                     appendMessageDOM(msg.role, msg.content);
                 }
             });
-            scrollToBottom(true);
+            scrollToBottom(true, true);
         }
 
         function addCopyButtons(container) {
@@ -561,7 +767,7 @@
 
         async function sendMessage() {
             const text = userInput.value.trim();
-            if (!text && !attachedImageBase64) return;
+            if (!text && !attachedImageBase64 && !attachedDocText) return;
 
             if (!OPENROUTER_API_KEY) {
                 verifyApiKeyPresence();
@@ -569,7 +775,7 @@
             }
 
             const currentModel = modelSelect.value;
-            if (attachedImageBase64 && !currentModel.includes('vl') && !currentModel.includes('gemma-4')) {
+            if (attachedImageBase64 && !modelSupportsVision(currentModel)) {
                 alert("⚠️ Выбранная модель не поддерживает изображения! Выберите модель с пометкой VL сверху.");
                 return;
             }
@@ -583,6 +789,7 @@
             typingIndicator.classList.add('flex');
 
             let messagePayload;
+
             if (attachedImageBase64) {
                 messagePayload = {
                     role: 'user',
@@ -592,17 +799,21 @@
                     ]
                 };
                 appendMessageDOM('user', text, attachedImageBase64);
+            } else if (attachedDocText) {
+                const combined = `${text ? text + '\n\n' : ''}📄 Файл: ${attachedDocName}\n\`\`\`\n${attachedDocText}\n\`\`\``;
+                messagePayload = { role: 'user', content: combined };
+                appendMessageDOM('user', combined);
             } else {
                 messagePayload = { role: 'user', content: text };
                 appendMessageDOM('user', text);
             }
 
             chatHistory.push(messagePayload);
-            clearImagePreview(); 
+            clearAttachment(); 
 
             await saveToDB(chatHistory);
             await syncWithPhysicalFile();
-            scrollToBottom(true);
+            scrollToBottom(true, true);
 
             abortController = new AbortController();
             let aiContentDOM = null;
@@ -619,7 +830,7 @@
                     },
                     body: JSON.stringify({ 
                         model: currentModel, 
-                        messages: chatHistory,
+                        messages: buildMessagesForRequest(currentModel),
                         stream: true 
                     }),
                     signal: abortController.signal
@@ -764,3 +975,4 @@
     </script>
 </body>
   </html>
+ 
